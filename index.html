@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pong Master - Vertical Edition</title>
+    <style>
+        body { 
+            margin: 0; padding: 0; background-color: #000; 
+            overflow: hidden; touch-action: none; 
+            display: flex; justify-content: center; align-items: center; 
+            height: 100vh; font-family: 'Arial', sans-serif;
+        }
+        canvas { background-color: #000; border: 2px solid #444; display: none; }
+        
+        /* واجهة اختيار المستوى */
+        #menu {
+            text-align: center; color: white;
+            display: flex; flex-direction: column; gap: 20px;
+            z-index: 10;
+        }
+        button {
+            padding: 15px 40px; font-size: 20px; cursor: pointer;
+            border: none; border-radius: 10px; color: white; font-weight: bold;
+        }
+        .easy { background-color: #28a745; }
+        .medium { background-color: #ffc107; color: #000; }
+        .hard { background-color: #dc3545; }
+
+        /* تعديل تصميم النتيجة لتكون واضحة */
+        #scoreContainer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none; /* تظهر فقط عند بدء اللعبة */
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            width: 100%;
+        }
+        .score-text {
+            color: rgba(255, 255, 255, 0.8); /* لون أبيض واضح */
+            font-size: 60px;
+            font-weight: 900;
+            letter-spacing: 10px;
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="menu">
+        <h1 style="font-size: 24px; margin-bottom: 20px;">PONG MASTER</h1>
+        <button class="easy" onclick="startGame('easy')">مستوى سهل</button>
+        <button class="medium" onclick="startGame('medium')">مستوى متوسط</button>
+        <button class="hard" onclick="startGame('hard')">مستوى صعب</button>
+    </div>
+
+    <div id="scoreContainer">
+        <div id="scoreDisplay" class="score-text">0 - 0</div>
+    </div>
+    
+    <canvas id="pongCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('pongCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const scoreContainer = document.getElementById('scoreContainer');
+        const menu = document.getElementById('menu');
+
+        let difficulty = { speed: 5, aiPrecision: 0.08 };
+        let p1Score = 0, p2Score = 0;
+
+        function startGame(level) {
+            menu.style.display = 'none';
+            canvas.style.display = 'block';
+            scoreContainer.style.display = 'flex';
+            
+            if(level === 'easy') { difficulty.speed = 5; difficulty.aiPrecision = 0.06; }
+            else if(level === 'medium') { difficulty.speed = 8; difficulty.aiPrecision = 0.12; }
+            else { difficulty.speed = 12; difficulty.aiPrecision = 0.22; }
+            
+            resetBall();
+            draw();
+        }
+
+        function resize() {
+            canvas.width = window.innerWidth * 0.95;
+            canvas.height = window.innerHeight * 0.9;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let paddleWidth = 100, paddleHeight = 15;
+        let bottomX = (canvas.width - paddleWidth) / 2;
+        let topX = (canvas.width - paddleWidth) / 2;
+        let ballX = canvas.width / 2, ballY = canvas.height / 2;
+        let ballRadius = 10;
+        let ballSpeedX = 0, ballSpeedY = 0;
+
+        // لمس الشاشة لتحريك المضرب السفلي
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            let touch = e.touches[0];
+            let rect = canvas.getBoundingClientRect();
+            bottomX = (touch.clientX - rect.left) - paddleWidth / 2;
+            if (bottomX < 0) bottomX = 0;
+            if (bottomX > canvas.width - paddleWidth) bottomX = canvas.width - paddleWidth;
+        }, { passive: false });
+
+        function update() {
+            ballX += ballSpeedX;
+            ballY += ballSpeedY;
+
+            // اصطدام الجدران
+            if (ballX - ballRadius < 0 || ballX + ballRadius > canvas.width) ballSpeedX *= -1;
+
+            // اصطدام مضرب اللاعب (أسفل)
+            if (ballY + ballRadius > canvas.height - paddleHeight) {
+                if (ballX > bottomX && ballX < bottomX + paddleWidth) {
+                    ballSpeedY = -Math.abs(ballSpeedY) * 1.05;
+                    ballSpeedX = (ballX - (bottomX + paddleWidth/2)) * 0.25;
+                } else if (ballY > canvas.height) {
+                    p2Score++; updateScoreUI(); resetBall();
+                }
+            }
+
+            // اصطدام مضرب الكمبيوتر (أعلى)
+            if (ballY - ballRadius < paddleHeight) {
+                if (ballX > topX && ballX < topX + paddleWidth) {
+                    ballSpeedY = Math.abs(ballSpeedY) * 1.05;
+                } else if (ballY < 0) {
+                    p1Score++; updateScoreUI(); resetBall();
+                }
+            }
+
+            // ذكاء اصطناعي
+            topX += (ballX - (topX + paddleWidth / 2)) * difficulty.aiPrecision;
+            if (topX < 0) topX = 0;
+            if (topX > canvas.width - paddleWidth) topX = canvas.width - paddleWidth;
+        }
+
+        function updateScoreUI() {
+            scoreDisplay.innerText = `${p1Score} - ${p2Score}`;
+            // تأثير بسيط عند تغير النتيجة
+            scoreDisplay.style.transform = "scale(1.2)";
+            setTimeout(() => { scoreDisplay.style.transform = "scale(1)"; }, 200);
+        }
+
+        function resetBall() {
+            ballX = canvas.width / 2;
+            ballY = canvas.height / 2;
+            ballSpeedY = (ballSpeedY > 0 ? -difficulty.speed : difficulty.speed);
+            ballSpeedX = (Math.random() - 0.5) * 6;
+        }
+
+        function draw() {
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // خط المنتصف
+            ctx.strokeStyle = "#333";
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height/2); ctx.lineTo(canvas.width, canvas.height/2);
+            ctx.stroke();
+
+            // رسم المضارب
+            ctx.fillStyle = "#00ffcc"; // نيون أخضر للاعب
+            ctx.fillRect(bottomX, canvas.height - paddleHeight, paddleWidth, paddleHeight); 
+            ctx.fillStyle = "#ff0077"; // نيون وردي للكمبيوتر
+            ctx.fillRect(topX, 0, paddleWidth, paddleHeight); 
+
+            // الكرة
+            ctx.fillStyle = "white";
+            ctx.beginPath();
+            ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            update();
+            requestAnimationFrame(draw);
+        }
+    </script>
+</body>
+</html>
